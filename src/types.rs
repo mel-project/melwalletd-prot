@@ -42,7 +42,7 @@ pub trait MelwalletdHelpers<T: Melwallet> {
             key: Ed25519SK,
             pwd: Option<String>,
         ) -> anyhow::Result<()>;
-    async fn client() -> ValClient;
+    fn client(&self) -> ValClient;
 }
 
 #[async_trait]

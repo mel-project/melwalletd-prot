@@ -45,45 +45,12 @@ pub struct PoolInfo {
 #[derive(Serialize, Deserialize)]
 pub struct TxBalance(bool, TxKind, BTreeMap<String, i128>);
 
-#[derive(Error, Debug, Deserialize, Serialize)]
-pub enum RequestErrors {
-    #[error("Wallet could not be found")]
-    WalletNotFound,
-    #[error("Bad request")]
-    BadRequest(String),
-    #[error("Invalid Pool Key {0}")]
-    PoolKeyError(PoolKey),
-    #[error("Invalid Password")]
-    InvalidPassword,
-    #[error("Invalid Signature")]
-    InvalidSignature,
-    #[error(transparent)]
-    DatabaseError(String),
-    #[error("Http error {0}")]
-    HttpStatusError(http_types::StatusCode),
-    #[error("Failed to unlock wallet {0}")]
-    FailedUnlock(String),
-    #[error("Cannot find transaction {0}")]
-    TransactionNotFound(TxHash),
-    #[error("Cannot submit faucet transaction on this network")]
-    InvalidFaucetTransaction,
-    #[error("Lost transaction {0}, no longer pending but not confirmed; probably gave up")]
-    LostTransaction(TxHash),
-    #[error("Failed to create wallet: {0}")]
-    WalletCreationError(String),
+#[derive(Serialize, Deserialize, Error, Debug)]
+pub enum RequestError<T: std::error::Error>{
+    FatalError(String)git 
 }
 
-impl From<MelnetError> for RequestErrors {
-    fn from(_: MelnetError) -> Self {
-        RequestErrors::HttpStatusError(http_types::StatusCode::BadGateway)
-    }
-}
 
-impl<T> From<Option<T>> for RequestErrors {
-    fn from(_: Option<T>) -> Self {
-        RequestErrors::HttpStatusError(http_types::StatusCode::NotFound)
-    }
-}
 #[nanorpc_derive]
 #[async_trait]
 pub trait MelwalletdProtocol: Send + Sync {
@@ -159,13 +126,13 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
     }
     async fn get_summary(&self) -> Result<Header, RequestErrors> {
         let state = self.state.clone();
-        let client = state.client.clone();
+        let client = state.client().clone();
         let snap = client.snapshot().await?;
         Ok(snap.current_header())
     }
     async fn get_pool(&self, pool_key: PoolKey) -> Result<PoolState, RequestErrors> {
         let state = self.state.clone();
-        let client = state.client.clone();
+        let client = state.client().clone();
 
         println!("You get a pool key: {}", pool_key);
         let pool_key = pool_key
@@ -185,7 +152,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
         value: u128,
     ) -> Result<PoolInfo, RequestErrors> {
         let state = self.state.clone();
-        let client = state.client.clone();
+        let client = state.client().clone();
         if from == to {
             return Err(RequestErrors::BadRequest(
                 "cannot swap between identical denoms".to_owned(),
@@ -326,7 +293,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
             .ok_or(RequestErrors::WalletNotFound)?;
 
         // calculate fees
-        let client = state.client.clone();
+        let client = state.client().clone();
         let snapshot = client.snapshot().await?;
         let fee_multiplier = snapshot.current_header().fee_multiplier;
         let kind = request.kind;
@@ -354,7 +321,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
                 },
                 request.nobalance.clone(),
                 request.fee_ballast,
-                state.client.snapshot().await?,
+                state.client().snapshot().await?,
             )
             .await
             .map_err(|_| RequestErrors::BadRequest("".to_owned()))?;
@@ -367,7 +334,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
             .get_wallet(&wallet_name)
             .await
             .ok_or(RequestErrors::BadRequest("".to_owned()))?;
-        let snapshot = state.client.snapshot().await?;
+        let snapshot = state.client().snapshot().await?;
 
         // we send it off ourselves
         snapshot.get_raw().send_tx(tx.clone()).await?;
@@ -394,7 +361,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
             .await
             .ok_or(RequestErrors::WalletNotFound)?;
         let raw = wallet
-            .get_transaction(txhash.into(), async { Ok(state.client.snapshot().await?) })
+            .get_transaction(txhash.into(), async { Ok(state.client().snapshot().await?) })
             .await?
             .ok_or(RequestErrors::TransactionNotFound(txhash.into()))?;
 
