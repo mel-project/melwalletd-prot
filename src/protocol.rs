@@ -47,7 +47,7 @@ pub struct TxBalance(bool, TxKind, BTreeMap<String, i128>);
 
 #[derive(Serialize, Deserialize, Error, Debug)]
 pub enum RequestError<T: std::error::Error>{
-    FatalError(String)git 
+    FatalError(String)
 }
 
 
