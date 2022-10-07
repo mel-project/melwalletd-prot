@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::error::{self, MelnetError, ValClientError, WalletNotFound, InvalidPassword};
+use crate::error::{self, MelnetError, ValClientError, WalletNotFound, InvalidPassword, StateError, PoolKeyError};
 use crate::request_errors::{
     self, CreateWalletError, DumpCoinsError, DumpTransactionsError, ExportSkFromWalletError,
     GetPoolError, GetPoolInfoError, GetSummaryError, GetTxBalanceError, GetTxError, PoolError,
@@ -67,14 +67,13 @@ pub trait MelwalletdProtocol: Send + Sync {
     async fn get_summary(&self) -> Result<Header, error::MelnetError>;
 
     ///Attempts to get a poolstate
-    ///
-    async fn get_pool(&self, pool_key: PoolKey) -> Result<PoolState, GetPoolError>;
+    async fn get_pool(&self, pool_key: PoolKey) -> Result<PoolState, StateError<PoolKeyError>>;
     async fn simulate_pool_swap(
         &self,
         to: Denom,
         from: Denom,
         value: u128,
-    ) -> Result<PoolInfo, GetPoolInfoError>;
+    ) -> Result<PoolInfo, StateError<PoolKeyError>>;
     async fn create_wallet(
         &self,
         wallet_name: String,
@@ -124,9 +123,8 @@ pub struct MelwalletdRpcImpl<T: Melwallet, State: MelwalletdHelpers<T>> {
     pub state: Arc<State>,
     _phantom: PhantomData<T>,
 }
-#[async_trait]
-impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> MelwalletdProtocol
-    for MelwalletdRpcImpl<T, State>
+impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
+     MelwalletdRpcImpl<T, State>
 {
     async fn summarize_wallet(&self, wallet_name: String) -> Result<WalletSummary, WalletNotFound> {
         let state = self.state.clone();
@@ -150,7 +148,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
     ///     inability to create snapshot
     /// returns None if pool doesn't exist
     /// ErrorEnum => PoolError; PoolKeyError *melnet::MelnetError BadRequest
-    async fn get_pool(&self, pool_key: PoolKey) -> Result<Option<PoolState>, GetPoolError> {
+    async fn get_pool(&self, pool_key: PoolKey) -> Result<Option<PoolState>, StateError<PoolKeyError>> {
         let pool_key = pool_key
             .to_canonical()
             .ok_or_else(|| error::PoolKeyError(pool_key))?;

@@ -108,31 +108,3 @@ pub struct PoolInfo {
 #[derive(Serialize, Deserialize)]
 pub struct TxBalance(bool, TxKind, BTreeMap<String, i128>);
 
-#[derive(Error, Debug, Deserialize, Serialize)]
-pub enum RequestErrors {
-    #[error("Wallet could not be found")]
-    WalletNotFound,
-    #[error("Bad request")]
-    BadRequest(String),
-    #[error("Invalid Pool Key {0}")]
-    PoolKeyError(PoolKey),
-    #[error("Invalid Password")]
-    InvalidPassword,
-    #[error("Invalid Signature")]
-    InvalidSignature,
-    #[error(transparent)]
-    DatabaseError(#[from] DatabaseError<DbError>),
-    #[error("Http error {0}")]
-    HttpStatusError(http_types::StatusCode),
-    #[error("Failed to unlock wallet {0}")]
-    FailedUnlock(String),
-    #[error("Cannot find transaction {0}")]
-    TransactionNotFound(TxHash),
-    #[error("Cannot submit faucet transaction on this network")]
-    InvalidFaucetTransaction,
-    #[error("Lost transaction {0}, no longer pending but not confirmed; probably gave up")]
-    LostTransaction(TxHash),
-    #[error("Failed to create wallet: {0}")]
-    WalletCreationError(String),
-}
-

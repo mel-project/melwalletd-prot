@@ -63,3 +63,17 @@ pub struct MelnetError(#[from] pub melnet::MelnetError);
 #[error("{0}")]
 pub struct SecretKeyError(pub String);
 
+
+
+#[derive(Error)]
+pub enum StateError<T: std::error::Error> {
+
+    #[error("Unable to query node")]
+    ValClientError(#[from] melnet::MelnetError),
+
+    #[error(transparent)]
+    OtherError(T),
+    
+
+}
+
