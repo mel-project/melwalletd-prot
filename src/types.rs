@@ -9,6 +9,8 @@ use themelio_structs::{Transaction, Address, TxHash, Denom, CoinValue, BlockHeig
 use thiserror::Error;
 use tmelcrypt::Ed25519SK;
 
+use crate::error::InvalidPassword;
+
 /// This trait is implemented by anything "secret key-like" that can sign a transaction. This includes secret keys, password-encumbered secret keys,
 pub trait Signer: Send + Sync + 'static {
     /// Given a transaction, returns the signed version. Signing may fail (e.g. due to communication failure).
@@ -33,7 +35,7 @@ pub trait MelwalletdHelpers<T: Melwallet> {
     async fn list_wallets(&self) -> BTreeMap<String, WalletSummary>;
     fn get_signer(&self, name: &str) -> Option<Arc<dyn Signer>>;
     fn unlock(&self, name: &str, pwd: Option<String>) -> Option<()>;
-    fn get_secret_key(&self, name: &str, pwd: Option<String>) -> Option<Ed25519SK>;
+    fn get_secret_key(&self, name: &str, pwd: Option<String>) -> Result<Option<Ed25519SK>, InvalidPassword>;
     async fn get_wallet(&self, name: &str) -> Option<T>;
     fn lock(&self, name: &str);
     async fn create_wallet(

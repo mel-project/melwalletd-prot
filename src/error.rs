@@ -53,16 +53,13 @@ pub struct LostTransaction(pub TxHash);
 
 #[derive(Error, Debug, Deserialize, Serialize)]
 #[error("Failed to create wallet: {0}")]
-pub struct WalletCreationError(pub String);
+pub struct WalletCreationError(#[from] pub anyhow::Error);
 
 #[derive(Error, Debug, Deserialize, Serialize)]
 #[error(transparent)]
 pub struct MelnetError(#[from] pub melnet::MelnetError);
 
-/// rpc method errors
+#[derive(Error, Debug, Deserialize, Serialize)]
+#[error("{0}")]
+pub struct SecretKeyError(pub String);
 
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum GetPoolError {
-    #[error(transparent)]
-    PoolKeyError(#[from] PoolKeyError),
-}

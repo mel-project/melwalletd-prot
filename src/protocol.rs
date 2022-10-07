@@ -2,11 +2,11 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::error::{self, ValClientError};
+use crate::error::{self, MelnetError, ValClientError, WalletNotFound, InvalidPassword};
 use crate::request_errors::{
     self, CreateWalletError, DumpCoinsError, DumpTransactionsError, ExportSkFromWalletError,
-    GetPoolError, GetPoolInfoError, GetSummaryError, GetTxBalanceError, GetTxError, PrepareTxError,
-    SendFaucetError, SendTxError, SummarizeWalletError, UnlockWalletError,
+    GetPoolError, GetPoolInfoError, GetSummaryError, GetTxBalanceError, GetTxError, PoolError,
+    PrepareTxError, SendFaucetError, SendTxError, SummarizeWalletError, UnlockWalletError,
 };
 use crate::types::{Melwallet, MelwalletdHelpers, WalletSummary};
 use crate::walletdata::{AnnCoinID, TransactionStatus};
@@ -63,10 +63,13 @@ pub trait MelwalletdProtocol: Send + Sync {
         wallet_name: String,
     ) -> Result<WalletSummary, error::WalletNotFound>;
 
-    /// Attempts to get network information 
+    /// Attempts to get network information
     async fn get_summary(&self) -> Result<Header, error::MelnetError>;
+
+    ///Attempts to get a poolstate
+    ///
     async fn get_pool(&self, pool_key: PoolKey) -> Result<PoolState, GetPoolError>;
-    async fn get_pool_info(
+    async fn simulate_pool_swap(
         &self,
         to: Denom,
         from: Denom,
@@ -125,11 +128,7 @@ pub struct MelwalletdRpcImpl<T: Melwallet, State: MelwalletdHelpers<T>> {
 impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> MelwalletdProtocol
     for MelwalletdRpcImpl<T, State>
 {
-    /// ErrorEnum => SummarizeWalletError; WalletNotFound
-    async fn summarize_wallet(
-        &self,
-        wallet_name: String,
-    ) -> Result<WalletSummary, SummarizeWalletError> {
+    async fn summarize_wallet(&self, wallet_name: String) -> Result<WalletSummary, WalletNotFound> {
         let state = self.state.clone();
         let wallet_list = state.list_wallets().await;
         wallet_list
@@ -138,51 +137,59 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
             .ok_or(error::WalletNotFound.into())
     }
 
-    /// ErrorEnum => GetSummaryError; *melnet::MelnetError
-    async fn get_summary(&self) -> Result<Header, GetSummaryError> {
+    async fn get_summary(&self) -> Result<Header, error::MelnetError> {
         let state = self.state.clone();
         let client = state.client().clone();
         let snap = client.snapshot().await?;
         Ok(snap.current_header())
     }
 
-    /// ErrorEnum => GetPoolError; PoolKeyError *melnet::MelnetError BadRequest
-    async fn get_pool(&self, pool_key: PoolKey) -> Result<PoolState, GetPoolError> {
-        let state = self.state.clone();
-        let client = state.client().clone();
-
-        println!("You get a pool key: {}", pool_key);
+    /// get a pool by poolkey,
+    /// can fail by:
+    ///     providing an invalid poolkey like MEL/MEL
+    ///     inability to create snapshot
+    /// returns None if pool doesn't exist
+    /// ErrorEnum => PoolError; PoolKeyError *melnet::MelnetError BadRequest
+    async fn get_pool(&self, pool_key: PoolKey) -> Result<Option<PoolState>, GetPoolError> {
         let pool_key = pool_key
             .to_canonical()
             .ok_or_else(|| error::PoolKeyError(pool_key))?;
-        client
-            .snapshot()
-            .await?
-            .get_pool(pool_key)
-            .await?
-            .ok_or_else(|| error::BadRequest("pool not found".to_owned()).into())
+
+        let state = self.state.clone();
+        let client = state.client().clone();
+        let pool = client.snapshot().await?.get_pool(pool_key).await?;
+        Ok(pool)
     }
-    /// ErrorEnum => GetPoolInfoError; BadRequest *melnet::MelnetError
-    async fn get_pool_info(
+
+    /// simulate swapping one asset for another
+    /// can fail :
+    ///     bad pool key
+    ///     failed snapshot
+    /// None if pool doesn't exist
+    async fn simulate_pool_swap(
         &self,
         to: Denom,
         from: Denom,
         value: u128,
-    ) -> Result<PoolInfo, GetPoolInfoError> {
+    ) -> Result<Option<PoolInfo>, PoolError> {
+        let pool_key = PoolKey {
+            left: to,
+            right: from,
+        };
+        let pool_key = pool_key
+            .to_canonical()
+            .ok_or_else(|| error::PoolKeyError(pool_key))?;
+
         let state = self.state.clone();
         let client = state.client().clone();
-        if from == to {
-            return Err(error::BadRequest(
-                "cannot swap between identical denoms".to_owned(),
-            ).into());
+
+        let maybe_pool_state = client.snapshot().await?.get_pool(pool_key).await?;
+
+        if maybe_pool_state.is_none() {
+            return Ok(None);
         }
-        let pool_key = PoolKey::new(from, to);
-        let pool_state = client
-            .snapshot()
-            .await?
-            .get_pool(pool_key)
-            .await?
-            .ok_or_else(|| error::BadRequest("pool not found".to_owned()))?;
+
+        let pool_state = maybe_pool_state.unwrap();
 
         let left_to_right = pool_key.left == from;
 
@@ -207,9 +214,9 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
                 poolkey: hex::encode(pool_key.to_bytes()),
             }
         };
-        Ok(r)
+        Ok(Some(r))
     }
-    /// ErrorEnum => CreateWalletError; WalletCreationError
+    /// ErrorEnum => CreateWalletError; SecretKeyError WalletCreationError
     async fn create_wallet(
         &self,
         wallet_name: String,
@@ -219,10 +226,11 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
         let state = self.state.clone();
         let sk = if let Some(secret) = secret {
             // We must reconstruct the secret key using the ed25519-dalek library
-            let secret = base32::decode(Alphabet::Crockford, &secret)
-                .ok_or(error::BadRequest("Failed to decode secret key".to_owned()))?;
+            let secret = base32::decode(Alphabet::Crockford, &secret).ok_or(
+                error::SecretKeyError("Failed to decode secret key".to_owned()),
+            )?;
             let secret = ed25519_dalek::SecretKey::from_bytes(&secret)
-                .map_err(|_| error::BadRequest("failed to create secret key".to_owned()))?;
+                .map_err(|_| error::SecretKeyError("Failed to create secret key".to_owned()))?;
             let public: ed25519_dalek::PublicKey = (&secret).into();
             let mut vv = [0u8; 64];
             vv[0..32].copy_from_slice(&secret.to_bytes());
@@ -233,7 +241,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
         };
         match state.create_wallet(&wallet_name, sk, password).await {
             Ok(_) => Ok(()),
-            Err(_) => Err(error::WalletCreationError(wallet_name).into()), // bikeshed this more
+            Err(e) => Err(error::WalletCreationError(e).into()), // bikeshed this more
         }
     }
 
@@ -270,12 +278,11 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
         state.lock(&wallet_name);
     }
 
-    /// ErrorEnum => UnlockWalletError;
     async fn unlock_wallet(
         &self,
         wallet_name: String,
         password: Option<String>,
-    ) -> Result<(), UnlockWalletError> {
+    ) -> Result<(), InvalidPassword> {
         let state = self.state.clone();
         state
             .unlock(&wallet_name, password)
@@ -283,16 +290,17 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync> Melw
         Ok(())
     }
 
-    /// ErrorEnum => ExportSkFromWalletError;
+    /// ErrorEnum => ExportSkFromWalletError; InvalidPassword
     async fn export_sk_from_wallet(
         &self,
         wallet_name: String,
         password: Option<String>,
-    ) -> Result<String, ExportSkFromWalletError> {
+    ) -> Result<Option<String>, ExportSkFromWalletError> {
         let state = self.state.clone();
-        let secret = state
-            .get_secret_key(&wallet_name, password)
-            .ok_or(error::InvalidPassword)?;
+        let maybe_secret = state
+            .get_secret_key(&wallet_name, password)?;
+
+        if maybe_secret.is_none() { return Ok(None) }
         let encoded: String = base32::encode(Alphabet::Crockford, &secret.0[..32]).into();
         Ok(encoded)
     }
