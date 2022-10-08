@@ -2,11 +2,14 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::error::{self, MelnetError, ValClientError, WalletNotFound, InvalidPassword, StateError, PoolKeyError};
-use crate::request_errors::{
-    self, CreateWalletError, DumpCoinsError, DumpTransactionsError, ExportSkFromWalletError,
-    GetPoolError, GetPoolInfoError, GetSummaryError, GetTxBalanceError, GetTxError, PoolError,
-    PrepareTxError, SendFaucetError, SendTxError, SummarizeWalletError, UnlockWalletError,
+use crate::error::{
+    self, InvalidPassword, PoolKeyError, StateError, WalletNotFound,
+};
+use crate::signer::Signer;
+
+use crate::request_errors::{CreateWalletError, DumpCoinsError, ExportSkFromWalletError,
+    GetTxBalanceError, GetTxError, PoolError,
+    PrepareTxError, SendFaucetError, SendTxError,
 };
 use crate::types::{Melwallet, MelwalletdHelpers, WalletSummary};
 use crate::walletdata::{AnnCoinID, TransactionStatus};
@@ -20,10 +23,8 @@ use themelio_structs::{
 use themelio_structs::{Header, PoolKey, PoolState};
 use tmelcrypt::{Ed25519SK, HashVal, Hashable};
 
-use melnet::{self, MelnetError};
 use serde::*;
 
-use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PrepareTxArgs {
@@ -55,68 +56,68 @@ pub struct TxBalance(bool, TxKind, BTreeMap<String, i128>);
 //     FatalError(String),
 // }
 
-#[nanorpc_derive]
-#[async_trait]
-pub trait MelwalletdProtocol: Send + Sync {
-    async fn summarize_wallet(
-        &self,
-        wallet_name: String,
-    ) -> Result<WalletSummary, error::WalletNotFound>;
+// #[nanorpc_derive]
+// #[async_trait]
+// pub trait MelwalletdProtocol: Send + Sync {
+//     async fn summarize_wallet(
+//         &self,
+//         wallet_name: String,
+//     ) -> Result<WalletSummary, error::WalletNotFound>;
 
-    /// Attempts to get network information
-    async fn get_summary(&self) -> Result<Header, error::MelnetError>;
+//     /// Attempts to get network information
+//     async fn get_summary(&self) -> Result<Header, error::MelnetError>;
 
-    ///Attempts to get a poolstate
-    async fn get_pool(&self, pool_key: PoolKey) -> Result<PoolState, StateError<PoolKeyError>>;
-    async fn simulate_pool_swap(
-        &self,
-        to: Denom,
-        from: Denom,
-        value: u128,
-    ) -> Result<PoolInfo, StateError<PoolKeyError>>;
-    async fn create_wallet(
-        &self,
-        wallet_name: String,
-        password: Option<String>,
-        secret: Option<String>,
-    ) -> Result<(), CreateWalletError>;
-    async fn dump_coins(
-        &self,
-        wallet_name: String,
-    ) -> Result<Vec<(CoinID, CoinData)>, DumpCoinsError>;
-    async fn dump_transactions(
-        &self,
-        wallet_name: String,
-    ) -> Result<Vec<(TxHash, Option<BlockHeight>)>, DumpTransactionsError>;
-    async fn lock_wallet(&self, wallet_name: String);
-    async fn unlock_wallet(
-        &self,
-        wallet_name: String,
-        password: Option<String>,
-    ) -> Result<(), UnlockWalletError>;
-    async fn export_sk_from_wallet(
-        &self,
-        wallet_name: String,
-        password: Option<String>,
-    ) -> Result<String, ExportSkFromWalletError>;
-    async fn prepare_tx(
-        &self,
-        wallet_name: String,
-        request: PrepareTxArgs,
-    ) -> Result<Transaction, PrepareTxError>;
-    async fn send_tx(&self, wallet_name: String, tx: Transaction) -> Result<TxHash, SendTxError>;
-    async fn get_tx_balance(
-        &self,
-        wallet_name: String,
-        txhash: HashVal,
-    ) -> Result<TxBalance, GetTxBalanceError>;
-    async fn get_tx(
-        &self,
-        wallet_name: String,
-        txhash: HashVal,
-    ) -> Result<TransactionStatus, GetTxError>;
-    async fn send_faucet(&self, wallet_name: String) -> Result<TxHash, SendFaucetError>;
-}
+//     ///Attempts to get a poolstate
+//     async fn get_pool(&self, pool_key: PoolKey) -> Result<PoolState, StateError<PoolKeyError>>;
+//     async fn simulate_pool_swap(
+//         &self,
+//         to: Denom,
+//         from: Denom,
+//         value: u128,
+//     ) -> Result<PoolInfo, StateError<PoolKeyError>>;
+//     async fn create_wallet(
+//         &self,
+//         wallet_name: String,
+//         password: Option<String>,
+//         secret: Option<String>,
+//     ) -> Result<(), CreateWalletError>;
+//     async fn dump_coins(
+//         &self,
+//         wallet_name: String,
+//     ) -> Result<Vec<(CoinID, CoinData)>, DumpCoinsError>;
+//     async fn dump_transactions(
+//         &self,
+//         wallet_name: String,
+//     ) -> Result<Vec<(TxHash, Option<BlockHeight>)>, DumpTransactionsError>;
+//     async fn lock_wallet(&self, wallet_name: String);
+//     async fn unlock_wallet(
+//         &self,
+//         wallet_name: String,
+//         password: Option<String>,
+//     ) -> Result<(), UnlockWalletError>;
+//     async fn export_sk_from_wallet(
+//         &self,
+//         wallet_name: String,
+//         password: Option<String>,
+//     ) -> Result<String, ExportSkFromWalletError>;
+//     async fn prepare_tx(
+//         &self,
+//         wallet_name: String,
+//         request: PrepareTxArgs,
+//     ) -> Result<Transaction, PrepareTxError>;
+//     async fn send_tx(&self, wallet_name: String, tx: Transaction) -> Result<TxHash, SendTxError>;
+//     async fn get_tx_balance(
+//         &self,
+//         wallet_name: String,
+//         txhash: HashVal,
+//     ) -> Result<TxBalance, GetTxBalanceError>;
+//     async fn get_tx(
+//         &self,
+//         wallet_name: String,
+//         txhash: HashVal,
+//     ) -> Result<TransactionStatus, GetTxError>;
+//     async fn send_faucet(&self, wallet_name: String) -> Result<TxHash, SendFaucetError>;
+// }
 
 #[derive(Clone)]
 pub struct MelwalletdRpcImpl<T: Melwallet, State: MelwalletdHelpers<T>> {
@@ -124,7 +125,7 @@ pub struct MelwalletdRpcImpl<T: Melwallet, State: MelwalletdHelpers<T>> {
     _phantom: PhantomData<T>,
 }
 impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
-     MelwalletdRpcImpl<T, State>
+    MelwalletdRpcImpl<T, State>
 {
     async fn summarize_wallet(&self, wallet_name: String) -> Result<WalletSummary, WalletNotFound> {
         let state = self.state.clone();
@@ -147,8 +148,11 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
     ///     providing an invalid poolkey like MEL/MEL
     ///     inability to create snapshot
     /// returns None if pool doesn't exist
-    /// ErrorEnum => PoolError; PoolKeyError *melnet::MelnetError BadRequest
-    async fn get_pool(&self, pool_key: PoolKey) -> Result<Option<PoolState>, StateError<PoolKeyError>> {
+    /// ErrorEnum => PoolError; PoolKeyError *melnet::MelnetError 
+    async fn get_pool(
+        &self,
+        pool_key: PoolKey,
+    ) -> Result<Option<PoolState>, StateError<PoolKeyError>> {
         let pool_key = pool_key
             .to_canonical()
             .ok_or_else(|| error::PoolKeyError(pool_key))?;
@@ -169,7 +173,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         to: Denom,
         from: Denom,
         value: u128,
-    ) -> Result<Option<PoolInfo>, PoolError> {
+    ) -> Result<Option<PoolInfo>, StateError<PoolError>> {
         let pool_key = PoolKey {
             left: to,
             right: from,
@@ -257,11 +261,10 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         let coin_vec = &coins.into_iter().collect::<Vec<_>>();
         Ok(coin_vec.to_owned())
     }
-    /// ErrorEnum => DumpTransactionsError;
     async fn dump_transactions(
         &self,
         wallet_name: String,
-    ) -> Result<Vec<(TxHash, Option<BlockHeight>)>, DumpTransactionsError> {
+    ) -> Result<Vec<(TxHash, Option<BlockHeight>)>, WalletNotFound> {
         let state = self.state.clone();
         let wallet = state
             .get_wallet(&wallet_name)
@@ -293,14 +296,18 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         &self,
         wallet_name: String,
         password: Option<String>,
-    ) -> Result<Option<String>, ExportSkFromWalletError> {
+    ) -> Result<Option<String>, InvalidPassword> {
         let state = self.state.clone();
-        let maybe_secret = state
-            .get_secret_key(&wallet_name, password)?;
+        let maybe_secret = state.get_secret_key(&wallet_name, password)?;
 
-        if maybe_secret.is_none() { return Ok(None) }
+        if maybe_secret.is_none() {
+            return Ok(None);
+        }
+
+        let secret = maybe_secret.unwrap();
+
         let encoded: String = base32::encode(Alphabet::Crockford, &secret.0[..32]).into();
-        Ok(encoded)
+        Ok(Some(encoded))
     }
 
     /// ErrorEnum => PrepareTxError;

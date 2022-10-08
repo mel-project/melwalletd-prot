@@ -4,10 +4,6 @@ use crate::error;
 
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum DumpTransactionsError{
-    
-}
-#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum PrepareTxError{
     
 }
@@ -33,8 +29,6 @@ pub enum PoolError{
     PoolKeyError(#[from] error::PoolKeyError),
     #[error(transparent)]
     MelnetError(#[from] melnet::MelnetError),
-    #[error(transparent)]
-    BadRequest(#[from] error::BadRequest),
     
 }
 #[derive(Error, Debug, Serialize, Deserialize)]
