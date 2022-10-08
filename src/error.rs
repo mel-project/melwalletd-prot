@@ -1,16 +1,23 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use themelio_structs::{PoolKey, TxHash};
 
-
+use crate::types::Melwallet;
 
 // ### EXTERNAL ERRORS ###
 trait ExternalError {}
-#[derive(Error, Debug, Deserialize, Serialize)]
-#[error(transparent)]
-pub struct MelnetError(#[from] pub melnet::MelnetError);
-impl ExternalError for MelnetError{}
+#[derive(Error, Debug, Serialize, Deserialize)]
+#[error("Melnet error")]
+pub struct MelnetError(String);
+impl ExternalError for MelnetError {}
+impl From<melnet::MelnetError> for MelnetError {
+    fn from(err: melnet::MelnetError) -> Self {
+        MelnetError(err.to_string())
+    }
+}
 
 // ### INTERNAL ERRORS ###
 
@@ -40,7 +47,6 @@ pub struct InvalidPassword;
 #[error("Invalid Signature")]
 pub struct InvalidSignature;
 
-
 //TRANSACTION ERRORS
 
 #[derive(Error, Debug, Deserialize, Serialize)]
@@ -57,16 +63,19 @@ pub struct LostTransaction(pub TxHash);
 
 // #### COMPOUND ERRORS ####
 
-
 #[derive(Error, Serialize, Deserialize)]
-pub enum MelwalletdError<T: std::error::Error, J: ExternalError> {
+pub enum MelwalletdError<T: std::error::Error, J: ExternalError + std::error::Error> {
     #[error(transparent)]
-    External(#[from] J),
+    Exo(J),
 
     #[error(transparent)]
-    Internal(T),
+    Endo(#[from] T),
 }
-
+// pub type Exo = MelwalletdError::Exo;
 pub type StateError<T> = MelwalletdError<T, MelnetError>;
 
- 
+pub fn to_exo<K: ExternalError + std::error::Error, T: std::error::Error, J: Into<K>>(
+    err: J,
+) -> MelwalletdError<T, K> {
+    MelwalletdError::Exo(err.into())
+}

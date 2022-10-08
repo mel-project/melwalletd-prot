@@ -2,14 +2,16 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use crate::error::MelwalletdError::{Endo, Exo};
+
 use crate::error::{
-    self, InvalidPassword, PoolKeyError, StateError, WalletNotFound,
+    self, to_exo, InvalidPassword, MelwalletdError, PoolKeyError, StateError, WalletNotFound,
 };
 use crate::signer::Signer;
 
-use crate::request_errors::{CreateWalletError, DumpCoinsError, ExportSkFromWalletError,
-    GetTxBalanceError, GetTxError, PoolError,
-    PrepareTxError, SendFaucetError, SendTxError,
+use crate::request_errors::{
+    CreateWalletError, DumpCoinsError, ExportSkFromWalletError, GetTxBalanceError, GetTxError,
+    PoolError, PrepareTxError, SendFaucetError, SendTxError,
 };
 use crate::types::{Melwallet, MelwalletdHelpers, WalletSummary};
 use crate::walletdata::{AnnCoinID, TransactionStatus};
@@ -24,7 +26,6 @@ use themelio_structs::{Header, PoolKey, PoolState};
 use tmelcrypt::{Ed25519SK, HashVal, Hashable};
 
 use serde::*;
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PrepareTxArgs {
@@ -148,7 +149,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
     ///     providing an invalid poolkey like MEL/MEL
     ///     inability to create snapshot
     /// returns None if pool doesn't exist
-    /// ErrorEnum => PoolError; PoolKeyError *melnet::MelnetError 
+    /// ErrorEnum => PoolError; PoolKeyError *melnet::MelnetError
     async fn get_pool(
         &self,
         pool_key: PoolKey,
@@ -159,7 +160,10 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
 
         let state = self.state.clone();
         let client = state.client().clone();
-        let pool = client.snapshot().await?.get_pool(pool_key).await?;
+
+        let snapshot = client.snapshot().await.map_err(to_exo)?;
+
+        let pool = snapshot.get_pool(pool_key).await.map_err(to_exo)?;
         Ok(pool)
     }
 
@@ -173,7 +177,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         to: Denom,
         from: Denom,
         value: u128,
-    ) -> Result<Option<PoolInfo>, StateError<PoolError>> {
+    ) -> Result<Option<PoolInfo>, StateError<PoolKeyError>> {
         let pool_key = PoolKey {
             left: to,
             right: from,
@@ -185,7 +189,13 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         let state = self.state.clone();
         let client = state.client().clone();
 
-        let maybe_pool_state = client.snapshot().await?.get_pool(pool_key).await?;
+        let maybe_pool_state = client
+            .snapshot()
+            .await
+            .map_err(to_exo)?
+            .get_pool(pool_key)
+            .await
+            .map_err(to_exo)?;
 
         if maybe_pool_state.is_none() {
             return Ok(None);
@@ -310,7 +320,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         Ok(Some(encoded))
     }
 
-    /// ErrorEnum => PrepareTxError;
+    /// ErrorEnum => PrepareTxError; InvalidSignature
     async fn prepare_tx(
         &self,
         wallet_name: String,
