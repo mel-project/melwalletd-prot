@@ -4,12 +4,11 @@ use async_trait::async_trait;
 use futures::Future;
 use serde::{Serialize, Deserialize};
 use themelio_nodeprot::{ValClientSnapshot, ValClient};
-use themelio_stf::melvm::Covenant;
 use themelio_structs::{Transaction, Address, TxHash, Denom, CoinValue, BlockHeight, CoinID, CoinData, CoinDataHeight, NetID, TxKind, PoolKey, Header};
-use thiserror::Error;
 use tmelcrypt::Ed25519SK;
 
 use crate::{error::InvalidPassword, signer::Signer};
+
 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -80,25 +79,25 @@ pub trait Melwallet {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PrepareTxArgs {
     #[serde(default)]
-    kind: Option<TxKind>,
-    inputs: Vec<CoinID>,
-    outputs: Vec<CoinData>,
+    pub kind: Option<TxKind>,
+    pub inputs: Vec<CoinID>,
+    pub outputs: Vec<CoinData>,
     #[serde(default, with = "stdcode::hexvec")]
-    covenants: Vec<Vec<u8>>,
-    data: Option<String>,
+    pub covenants: Vec<Vec<u8>>,
+    pub data: Option<String>,
     #[serde(default)]
-    nobalance: Vec<Denom>,
+    pub nobalance: Vec<Denom>,
     #[serde(default)]
-    fee_ballast: usize,
-    signing_key: Option<String>,
+    pub fee_ballast: usize,
+    pub signing_key: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct PoolInfo {
-    result: u128,
-    price_impact: f64,
-    poolkey: String,
+    pub result: u128,
+    pub price_impact: f64,
+    pub poolkey: String,
 }
 #[derive(Serialize, Deserialize)]
-pub struct TxBalance(bool, TxKind, BTreeMap<String, i128>);
+pub struct TxBalance(pub bool, pub TxKind, pub BTreeMap<String, i128>);
 

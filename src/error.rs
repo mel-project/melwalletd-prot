@@ -1,9 +1,6 @@
-use std::fmt::Display;
-
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::types::Melwallet;
 use std::error::Error as StdError;
 use themelio_structs::{PoolKey, TxHash};
 
@@ -20,7 +17,6 @@ impl From<melnet::MelnetError> for MelnetError {
 }
 
 // ### INTERNAL ERRORS ###
-
 
 #[derive(Error, Debug, Deserialize, Serialize)]
 #[error("Invalid Pool Key {0}")]
@@ -64,24 +60,24 @@ pub struct LostTransaction(pub TxHash);
 
 // #### COMPOUND ERRORS ####
 
-
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum CreateWalletError{
+pub enum NeverError {
+    
+}
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum CreateWalletError {
     #[error(transparent)]
     SecretKeyError(#[from] SecretKeyError),
     #[error(transparent)]
     WalletCreationError(#[from] WalletCreationError),
-    
 }
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum PrepareTxError{
+pub enum PrepareTxError {
     #[error(transparent)]
     InvalidSignature(#[from] InvalidSignature),
     #[error(transparent)]
     FailedUnlock(#[from] FailedUnlock),
-    
 }
-
 
 #[derive(Error, Debug, Deserialize, Serialize)]
 pub enum TransactionError {
