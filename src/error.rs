@@ -3,15 +3,15 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::types::Melwallet;
+use std::error::Error as StdError;
 use themelio_structs::{PoolKey, TxHash};
 
-use crate::types::Melwallet;
-
 // ### EXTERNAL ERRORS ###
-trait ExternalError {}
+pub trait ExternalError {}
 #[derive(Error, Debug, Serialize, Deserialize)]
 #[error("Melnet error")]
-pub struct MelnetError(String);
+pub struct MelnetError(pub String);
 impl ExternalError for MelnetError {}
 impl From<melnet::MelnetError> for MelnetError {
     fn from(err: melnet::MelnetError) -> Self {
@@ -21,9 +21,6 @@ impl From<melnet::MelnetError> for MelnetError {
 
 // ### INTERNAL ERRORS ###
 
-#[derive(Error, Debug, Deserialize, Serialize)]
-#[error("Wallet could not be found")]
-pub struct WalletNotFound;
 
 #[derive(Error, Debug, Deserialize, Serialize)]
 #[error("Invalid Pool Key {0}")]
@@ -33,7 +30,7 @@ pub struct PoolKeyError(pub PoolKey);
 
 #[derive(Error, Debug, Deserialize, Serialize)]
 #[error("Failed to create wallet: {0}")]
-pub struct WalletCreationError(#[from] pub anyhow::Error);
+pub struct WalletCreationError(pub String);
 
 #[derive(Error, Debug, Deserialize, Serialize)]
 #[error("{0}")]
@@ -46,6 +43,10 @@ pub struct InvalidPassword;
 #[derive(Error, Debug, Deserialize, Serialize)]
 #[error("Invalid Signature")]
 pub struct InvalidSignature;
+
+#[derive(Error, Debug, Deserialize, Serialize)]
+#[error("Invalid Signature")]
+pub struct FailedUnlock;
 
 //TRANSACTION ERRORS
 
@@ -63,19 +64,77 @@ pub struct LostTransaction(pub TxHash);
 
 // #### COMPOUND ERRORS ####
 
-#[derive(Error, Serialize, Deserialize)]
-pub enum MelwalletdError<T: std::error::Error, J: ExternalError + std::error::Error> {
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum CreateWalletError{
+    #[error(transparent)]
+    SecretKeyError(#[from] SecretKeyError),
+    #[error(transparent)]
+    WalletCreationError(#[from] WalletCreationError),
+    
+}
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum PrepareTxError{
+    #[error(transparent)]
+    InvalidSignature(#[from] InvalidSignature),
+    #[error(transparent)]
+    FailedUnlock(#[from] FailedUnlock),
+    
+}
+
+
+#[derive(Error, Debug, Deserialize, Serialize)]
+pub enum TransactionError {
+    #[error("Cannot find transaction {0}")]
+    NotFound(TxHash),
+
+    #[error("Cannot submit faucet transaction on this network")]
+    InvalidFaucet,
+
+    #[error("Lost transaction {0}, no longer pending but not confirmed; probably gave up")]
+    Lost(TxHash),
+}
+
+// ### Useful monads ###
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum NeedWallet<T: StdError> {
+    #[error("Couldn't find wallet: {0}")]
+    NotFound(String),
+    #[error(transparent)]
+    Other(#[from] T),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum ProtocolError<T: std::error::Error, J: ExternalError + StdError> {
+    #[error("{0}")]
+    BadRequest(String),
+
     #[error(transparent)]
     Exo(J),
 
     #[error(transparent)]
     Endo(#[from] T),
 }
-// pub type Exo = MelwalletdError::Exo;
-pub type StateError<T> = MelwalletdError<T, MelnetError>;
+
+#[derive(Error, Serialize, Deserialize)]
+pub enum MelwalletdError<T: std::error::Error> {
+    #[error("{0}")]
+    BadRequest(String),
+
+    #[error(transparent)]
+    Error(#[from] T),
+}
+
+// pub type Exo = ProtocolError::Exo;
+pub type StateError<T> = ProtocolError<T, MelnetError>;
 
 pub fn to_exo<K: ExternalError + std::error::Error, T: std::error::Error, J: Into<K>>(
     err: J,
-) -> MelwalletdError<T, K> {
-    MelwalletdError::Exo(err.into())
+) -> ProtocolError<T, K> {
+    ProtocolError::Exo(err.into())
+}
+
+pub fn default_melnet_error() -> melnet::MelnetError {
+    melnet::MelnetError::Custom("Default error".into())
 }

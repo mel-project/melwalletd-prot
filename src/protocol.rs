@@ -1,22 +1,24 @@
 use std::collections::BTreeMap;
+use std::convert::Infallible;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::error::MelwalletdError::{Endo, Exo};
+use crate::error::ProtocolError::{Endo, Exo};
 
 use crate::error::{
-    self, to_exo, InvalidPassword, MelwalletdError, PoolKeyError, StateError, WalletNotFound,
+    self, to_exo, InvalidPassword, MelwalletdError, NeedWallet, PoolKeyError, ProtocolError,
+    StateError, TransactionError, MelnetError,
 };
 use crate::signer::Signer;
 
 use crate::request_errors::{
-    CreateWalletError, DumpCoinsError, ExportSkFromWalletError, GetTxBalanceError, GetTxError,
-    PoolError, PrepareTxError, SendFaucetError, SendTxError,
+    CreateWalletError, PrepareTxError, 
 };
 use crate::types::{Melwallet, MelwalletdHelpers, WalletSummary};
 use crate::walletdata::{AnnCoinID, TransactionStatus};
 use async_trait::async_trait;
 use base32::Alphabet;
+use futures::never;
 use nanorpc::nanorpc_derive;
 use std::fmt::Debug;
 use themelio_structs::{
@@ -128,13 +130,13 @@ pub struct MelwalletdRpcImpl<T: Melwallet, State: MelwalletdHelpers<T>> {
 impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
     MelwalletdRpcImpl<T, State>
 {
-    async fn summarize_wallet(&self, wallet_name: String) -> Result<WalletSummary, WalletNotFound> {
+    async fn summarize_wallet(&self, wallet_name: String) -> Result<WalletSummary, NeedWallet<Infallible>> {
         let state = self.state.clone();
         let wallet_list = state.list_wallets().await;
         wallet_list
             .get(&wallet_name)
             .cloned()
-            .ok_or(error::WalletNotFound.into())
+            .ok_or(NeedWallet::NotFound(wallet_name))
     }
 
     async fn get_summary(&self) -> Result<Header, error::MelnetError> {
@@ -149,7 +151,6 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
     ///     providing an invalid poolkey like MEL/MEL
     ///     inability to create snapshot
     /// returns None if pool doesn't exist
-    /// ErrorEnum => PoolError; PoolKeyError *melnet::MelnetError
     async fn get_pool(
         &self,
         pool_key: PoolKey,
@@ -253,20 +254,19 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         };
         match state.create_wallet(&wallet_name, sk, password).await {
             Ok(_) => Ok(()),
-            Err(e) => Err(error::WalletCreationError(e).into()), // bikeshed this more
+            Err(e) => Err(error::WalletCreationError(e.to_string()).into()), // bikeshed this more
         }
     }
 
-    /// ErrorEnum => DumpCoinsError; WalletNotFound
     async fn dump_coins(
         &self,
         wallet_name: String,
-    ) -> Result<Vec<(CoinID, CoinData)>, DumpCoinsError> {
+    ) -> Result<Vec<(CoinID, CoinData)>, NeedWallet<Infallible>> {
         let state = self.state.clone();
         let wallet = state
             .get_wallet(&wallet_name)
             .await
-            .ok_or(error::WalletNotFound)?;
+            .ok_or(NeedWallet::NotFound(wallet_name))?;
         let coins = wallet.get_coin_mapping(true, false).await;
         let coin_vec = &coins.into_iter().collect::<Vec<_>>();
         Ok(coin_vec.to_owned())
@@ -274,12 +274,12 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
     async fn dump_transactions(
         &self,
         wallet_name: String,
-    ) -> Result<Vec<(TxHash, Option<BlockHeight>)>, WalletNotFound> {
+    ) -> Result<Vec<(TxHash, Option<BlockHeight>)>, NeedWallet<Infallible>> {
         let state = self.state.clone();
         let wallet = state
             .get_wallet(&wallet_name)
             .await
-            .ok_or(error::WalletNotFound)?;
+            .ok_or(NeedWallet::NotFound(wallet_name))?;
         let transactions = wallet.get_transaction_history().await;
         Ok(transactions)
     }
@@ -301,7 +301,6 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         Ok(())
     }
 
-    /// ErrorEnum => ExportSkFromWalletError; InvalidPassword
     async fn export_sk_from_wallet(
         &self,
         wallet_name: String,
@@ -320,36 +319,38 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         Ok(Some(encoded))
     }
 
-    /// ErrorEnum => PrepareTxError; InvalidSignature
+    /// ErrorEnum => PrepareTxError; InvalidSignature FailedUnlock
     async fn prepare_tx(
         &self,
         wallet_name: String,
         request: PrepareTxArgs,
-    ) -> Result<Transaction, PrepareTxError> {
+    ) -> Result<Transaction, ProtocolError<NeedWallet<PrepareTxError>, MelnetError>> {
         let state = self.state.clone();
         let signing_key: Arc<dyn Signer> = if let Some(signing_key) = request.signing_key.as_ref() {
             Arc::new(
                 signing_key
                     .parse::<Ed25519SK>()
-                    .map_err(|_| error::InvalidSignature)?,
+                    .map_err(|_| error::InvalidSignature)
+                    .map_err(|e| Endo(NeedWallet::Other(PrepareTxError::InvalidSignature(e))))?,
             )
         } else {
             state
                 .get_signer(&wallet_name)
-                .ok_or(error::FailedUnlock(wallet_name.clone()))?
+                .ok_or(error::FailedUnlock)
+                .map_err(|e| Endo(PrepareTxError::FailedUnlock(e).into()))?
         };
         let wallet = state
             .get_wallet(&wallet_name)
             .await
-            .ok_or(error::WalletNotFound)?;
+            .ok_or(NeedWallet::NotFound(wallet_name))?;
 
         // calculate fees
         let client = state.client().clone();
-        let snapshot = client.snapshot().await?;
+        let snapshot = client.snapshot().await.map_err(to_exo)?;
         let fee_multiplier = snapshot.current_header().fee_multiplier;
         let kind = request.kind;
         let data = match request.data.as_ref() {
-            Some(v) => Some(hex::decode(v).map_err(|_| error::BadRequest("".to_owned()))?),
+            Some(v) => hex::decode(v).ok(),
             None => None,
         };
         let prepared_tx = wallet
@@ -372,25 +373,32 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
                 },
                 request.nobalance.clone(),
                 request.fee_ballast,
-                state.client().snapshot().await?,
+                state.client().snapshot().await.map_err(to_exo)?,
             )
             .await
-            .map_err(|_| error::BadRequest("".to_owned()))?;
+            .map_err(|_| ProtocolError::BadRequest("".to_owned()))?;
 
         Ok(prepared_tx)
     }
 
-    /// ErrorEnum => SendTxError;
-    async fn send_tx(&self, wallet_name: String, tx: Transaction) -> Result<TxHash, SendTxError> {
+    async fn send_tx(
+        &self,
+        wallet_name: String,
+        tx: Transaction,
+    ) -> Result<TxHash, StateError<NeedWallet<Infallible>>> {
         let state = self.state.clone();
         let wallet = state
             .get_wallet(&wallet_name)
             .await
-            .ok_or(error::BadRequest("".to_owned()))?;
-        let snapshot = state.client().snapshot().await?;
+            .ok_or(NeedWallet::NotFound(wallet_name))?;
+        let snapshot = state.client().snapshot().await.map_err(to_exo)?;
 
         // we send it off ourselves
-        snapshot.get_raw().send_tx(tx.clone()).await?;
+        snapshot
+            .get_raw()
+            .send_tx(tx.clone())
+            .await
+            .map_err(to_exo)?;
         // we mark the TX as sent in this thread.
         wallet
             .commit_sent(
@@ -398,28 +406,31 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
                 snapshot.current_header().height + BlockHeight(10),
             )
             .await
-            .map_err(|_| error::BadRequest("".to_owned()))?;
+            .map_err(|_| ProtocolError::BadRequest("".to_owned()))?;
         log::info!("sent transaction with hash {}", tx.hash_nosigs());
         let r = &tx.hash_nosigs();
         Ok(r.to_owned())
     }
-    /// ErrorEnum => GetTxBalanceError;
     async fn get_tx_balance(
         &self,
         wallet_name: String,
         txhash: HashVal,
-    ) -> Result<TxBalance, GetTxBalanceError> {
+    ) -> Result<TxBalance, StateError<NeedWallet<TransactionError>>> {
         let state = self.state.clone();
         let wallet = state
             .get_wallet(&wallet_name)
             .await
-            .ok_or(error::WalletNotFound)?;
+            .ok_or(NeedWallet::NotFound(wallet_name))
+            .map_err(|e| Endo(e))?;
+
+        let snapshot = state.client().snapshot().await.map_err(to_exo)?;
         let raw = wallet
-            .get_transaction(txhash.into(), async {
-                Ok(state.client().snapshot().await?)
-            })
-            .await?
-            .ok_or(error::TransactionNotFound(txhash.into()))?;
+            .get_transaction(txhash.into(), async { Ok(snapshot) })
+            .await
+            .transpose()
+            .ok_or(TransactionError::NotFound(txhash.into()))
+            .map_err(|e| Endo(e.into()))?
+            .map_err(to_exo)?;
 
         // Is this self-originated? We check the covenants
         let self_originated = raw.covenants.iter().any(|c| c.hash() == wallet.address().0);
@@ -452,22 +463,23 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         Ok(r)
     }
 
-    /// ErrorEnum => GetTxError;
     async fn get_tx(
         &self,
         wallet_name: String,
         txhash: HashVal,
-    ) -> Result<TransactionStatus, GetTxError> {
+    ) -> Result<TransactionStatus, StateError<NeedWallet<TransactionError>>> {
         let state = self.state.clone();
         let wallet = state
             .get_wallet(&wallet_name)
             .await
-            .ok_or(error::WalletNotFound)?;
+            .ok_or(NeedWallet::NotFound(wallet_name))
+            .map_err(|e| Endo(e))?;
 
         let raw = wallet
             .get_cached_transaction(txhash.into())
             .await
-            .ok_or(error::TransactionNotFound(txhash.into()))?;
+            .ok_or(TransactionError::NotFound(txhash.into()))
+            .map_err(|e| Endo(NeedWallet::Other(e)))?;
         let mut confirmed_height = None;
         for idx in 0..raw.outputs.len() {
             if let Some(cdh) = wallet
@@ -496,7 +508,9 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         if confirmed_height.is_none() {
             // Must be pending
             if !wallet.is_pending(txhash.into()).await {
-                return Err(error::LostTransaction(txhash.into()));
+                return Err(Endo(NeedWallet::Other(TransactionError::Lost(
+                    txhash.into(),
+                ))));
             }
         }
         Ok(TransactionStatus {
@@ -506,18 +520,18 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         })
     }
 
-    /// ErrorEnum => SendFaucetError;
-    async fn send_faucet(&self, wallet_name: String) -> Result<TxHash, SendFaucetError> {
+    async fn send_faucet(&self, wallet_name: String) -> Result<TxHash, StateError<NeedWallet<TransactionError>>> {
         let state = self.state.clone();
-        let network = state.network;
+        let network = state.get_network();
         let wallet = state
             .get_wallet(&wallet_name)
             .await
-            .ok_or(error::WalletNotFound)?;
+            .ok_or(NeedWallet::NotFound(wallet_name))
+            .map_err(|e| Endo(e))?;
 
         // TODO: protect other networks where faucet transaction applicability is unknown
         if network == NetID::Mainnet {
-            return Err(error::InvalidFaucetTransaction);
+            return Err(Endo(NeedWallet::Other(TransactionError::InvalidFaucet)));
         }
         let tx = Transaction {
             kind: TxKind::Faucet,
@@ -538,7 +552,7 @@ impl<T: Melwallet + Send + Sync, State: MelwalletdHelpers<T> + Send + Sync>
         wallet
             .commit_sent(tx, BlockHeight(10000000000))
             .await
-            .map_err(|_| error::BadRequest("Failed to submit faucet transaction".to_owned()))?;
+            .map_err(|e| ProtocolError::Exo(MelnetError("Failed to submit faucet transaction".to_owned())))?;
         Ok(txhash)
     }
 }

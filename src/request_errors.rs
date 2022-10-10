@@ -4,34 +4,6 @@ use crate::error;
 
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum PrepareTxError{
-    
-}
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum SendTxError{
-    
-}
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum GetTxBalanceError{
-    
-}
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum GetTxError{
-    
-}
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum SendFaucetError{
-    
-}
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum PoolError{
-    #[error(transparent)]
-    PoolKeyError(#[from] error::PoolKeyError),
-    #[error(transparent)]
-    MelnetError(#[from] melnet::MelnetError),
-    
-}
-#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum CreateWalletError{
     #[error(transparent)]
     SecretKeyError(#[from] error::SecretKeyError),
@@ -40,14 +12,10 @@ pub enum CreateWalletError{
     
 }
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum DumpCoinsError{
+pub enum PrepareTxError{
     #[error(transparent)]
-    WalletNotFound(#[from] error::WalletNotFound),
-    
-}
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum ExportSkFromWalletError{
+    InvalidSignature(#[from] error::InvalidSignature),
     #[error(transparent)]
-    InvalidPassword(#[from] error::InvalidPassword),
+    FailedUnlock(#[from] error::FailedUnlock),
     
 }

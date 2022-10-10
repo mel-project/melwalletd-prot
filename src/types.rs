@@ -5,7 +5,7 @@ use futures::Future;
 use serde::{Serialize, Deserialize};
 use themelio_nodeprot::{ValClientSnapshot, ValClient};
 use themelio_stf::melvm::Covenant;
-use themelio_structs::{Transaction, Address, TxHash, Denom, CoinValue, BlockHeight, CoinID, CoinData, CoinDataHeight, NetID, TxKind, PoolKey};
+use themelio_structs::{Transaction, Address, TxHash, Denom, CoinValue, BlockHeight, CoinID, CoinData, CoinDataHeight, NetID, TxKind, PoolKey, Header};
 use thiserror::Error;
 use tmelcrypt::Ed25519SK;
 
@@ -38,6 +38,7 @@ pub trait MelwalletdHelpers<T: Melwallet> {
             pwd: Option<String>,
         ) -> anyhow::Result<()>;
     fn client(&self) -> ValClient;
+    fn get_network(&self) -> NetID;
 }
 
 #[async_trait]
