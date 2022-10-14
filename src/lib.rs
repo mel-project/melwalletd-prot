@@ -1,6 +1,6 @@
-mod protocol;
-mod types;
-mod walletdata;
-mod error;
-mod request_errors;
-mod signer;
+pub mod protocol;
+pub mod types;
+pub mod walletdata;
+pub mod error;
+pub mod request_errors;
+pub mod signer;

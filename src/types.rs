@@ -1,15 +1,24 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
-use futures::Future;
-use serde::{Serialize, Deserialize};
-use themelio_nodeprot::{ValClientSnapshot, ValClient};
-use themelio_structs::{Transaction, Address, TxHash, Denom, CoinValue, BlockHeight, CoinID, CoinData, CoinDataHeight, NetID, TxKind, PoolKey, Header};
+use serde::{Deserialize, Serialize};
+use themelio_nodeprot::{ValClient, ValClientSnapshot};
+use themelio_structs::{
+    Address, BlockHeight, CoinData, CoinDataHeight, CoinID, CoinValue, Denom, NetID, Transaction,
+    TxHash, TxKind,
+};
+use thiserror::Error;
 use tmelcrypt::Ed25519SK;
 
 use crate::{error::InvalidPassword, signer::Signer};
 
-
+#[derive(Error, Debug)]
+pub enum DatabaseError {
+    #[error("{0}")]
+    NetworkError(#[from] themelio_nodeprot::ValClientError),
+    #[error("{0}")]
+    ExecutionError(String),
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletSummary {
@@ -23,19 +32,24 @@ pub struct WalletSummary {
 }
 
 #[async_trait]
-pub trait MelwalletdHelpers<T: Melwallet> {
+/// Used by MelwalletProtocol
+pub trait MelwalletdHelpers {
     async fn list_wallets(&self) -> BTreeMap<String, WalletSummary>;
     fn get_signer(&self, name: &str) -> Option<Arc<dyn Signer>>;
     fn unlock(&self, name: &str, pwd: Option<String>) -> Option<()>;
-    fn get_secret_key(&self, name: &str, pwd: Option<String>) -> Result<Option<Ed25519SK>, InvalidPassword>;
-    async fn get_wallet(&self, name: &str) -> Option<T>;
+    fn get_secret_key(
+        &self,
+        name: &str,
+        pwd: Option<String>,
+    ) -> Result<Option<Ed25519SK>, InvalidPassword>;
+    async fn get_wallet(&self, name: &str) -> Option<Box<dyn Melwallet + Send + Sync>>;
     fn lock(&self, name: &str);
     async fn create_wallet(
-            &self,
-            name: &str,
-            key: Ed25519SK,
-            pwd: Option<String>,
-        ) -> anyhow::Result<()>;
+        &self,
+        name: &str,
+        key: Ed25519SK,
+        pwd: Option<String>,
+    ) -> anyhow::Result<()>;
     fn client(&self) -> ValClient;
     fn get_network(&self) -> NetID;
 }
@@ -46,8 +60,8 @@ pub trait Melwallet {
     async fn get_transaction(
         &self,
         txhash: TxHash,
-        fut_snapshot: impl Future<Output = anyhow::Result<ValClientSnapshot>>,
-    ) -> Result<Option<Transaction>, melnet::MelnetError>;
+        snapshot: ValClientSnapshot,
+    ) -> Result<Option<Transaction>, DatabaseError>;
     async fn get_cached_transaction(&self, txhash: TxHash) -> Option<Transaction>;
     async fn is_pending(&self, txhash: TxHash) -> bool;
     async fn get_balances(&self) -> BTreeMap<Denom, CoinValue>;
@@ -57,12 +71,14 @@ pub trait Melwallet {
         confirmed: bool,
         ignore_pending: bool,
     ) -> BTreeMap<CoinID, CoinData>;
+
+    #[allow(clippy::too_many_arguments)]
     async fn prepare(
         &self,
         inputs: Vec<CoinID>,
         outputs: Vec<CoinData>,
         fee_multiplier: u128,
-        sign: impl Fn(Transaction) -> anyhow::Result<Transaction>,
+        sign: Arc<Box<dyn Fn(Transaction) -> anyhow::Result<Transaction> + Send + Sync>>,
         nobalance: Vec<Denom>,
         fee_ballast: usize,
 
@@ -73,8 +89,6 @@ pub trait Melwallet {
     async fn get_coin_confirmation(&self, coin_id: CoinID) -> Option<CoinDataHeight>;
     async fn network_sync(&self, snapshot: ValClientSnapshot) -> anyhow::Result<()>;
 }
-
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PrepareTxArgs {
@@ -100,4 +114,3 @@ pub struct PoolInfo {
 }
 #[derive(Serialize, Deserialize)]
 pub struct TxBalance(pub bool, pub TxKind, pub BTreeMap<String, i128>);
-

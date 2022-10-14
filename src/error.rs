@@ -1,20 +1,19 @@
 use serde::{Deserialize, Serialize};
+use themelio_nodeprot::{NodeRpcError, ValClientError};
 use thiserror::Error;
 
-use std::error::Error as StdError;
+use std::{error::Error as StdError, fmt::Display};
 use themelio_structs::{PoolKey, TxHash};
-
 // ### EXTERNAL ERRORS ###
-pub trait ExternalError {}
 #[derive(Error, Debug, Serialize, Deserialize)]
-#[error("Melnet error")]
-pub struct MelnetError(pub String);
-impl ExternalError for MelnetError {}
-impl From<melnet::MelnetError> for MelnetError {
-    fn from(err: melnet::MelnetError) -> Self {
-        MelnetError(err.to_string())
-    }
+#[error("{0}")]
+pub struct NetworkError(pub String);
+
+
+pub fn to_network<T: Display>(e: T) -> NetworkError {
+    NetworkError(e.to_string())
 }
+
 
 // ### INTERNAL ERRORS ###
 
@@ -61,9 +60,7 @@ pub struct LostTransaction(pub TxHash);
 // #### COMPOUND ERRORS ####
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum NeverError {
-    
-}
+pub enum NeverError {}
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum CreateWalletError {
     #[error(transparent)]
@@ -89,6 +86,9 @@ pub enum TransactionError {
 
     #[error("Lost transaction {0}, no longer pending but not confirmed; probably gave up")]
     Lost(TxHash),
+
+    #[error("Failed to send transaction: {0}")]
+    SendFailed(String),
 }
 
 // ### Useful monads ###
@@ -102,35 +102,42 @@ pub enum NeedWallet<T: StdError> {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum ProtocolError<T: std::error::Error, J: ExternalError + StdError> {
+pub enum ProtocolError<T: StdError, K: StdError> {
     #[error("{0}")]
     BadRequest(String),
 
     #[error(transparent)]
-    Exo(J),
+    Exo(K),
 
     #[error(transparent)]
-    Endo(#[from] T),
+    Endo(T),
 }
 
-#[derive(Error, Serialize, Deserialize)]
-pub enum MelwalletdError<T: std::error::Error> {
-    #[error("{0}")]
-    BadRequest(String),
 
-    #[error(transparent)]
-    Error(#[from] T),
+
+impl <T: StdError> From<ValClientError> for ProtocolError<T,NetworkError> {
+    fn from(e: ValClientError) -> Self {
+        ProtocolError::Exo(to_network(e))
+    }
+}
+
+impl <T: Display + StdError, J: StdError> From<NodeRpcError<T>> for ProtocolError<J, NetworkError> {
+    fn from(e: NodeRpcError<T>) -> Self {
+        ProtocolError::Exo(to_network(e))
+    }
 }
 
 // pub type Exo = ProtocolError::Exo;
-pub type StateError<T> = ProtocolError<T, MelnetError>;
+pub type StateError<T> = ProtocolError<T, NetworkError>;
 
-pub fn to_exo<K: ExternalError + std::error::Error, T: std::error::Error, J: Into<K>>(
-    err: J,
-) -> ProtocolError<T, K> {
-    ProtocolError::Exo(err.into())
+pub fn to_exo<T: StdError, K: StdError>(err: K) -> ProtocolError<T, K> {
+    ProtocolError::Exo(err)
 }
 
-pub fn default_melnet_error() -> melnet::MelnetError {
-    melnet::MelnetError::Custom("Default error".into())
+pub fn to_endo<T: StdError, K: StdError>(err: T) -> ProtocolError<T, K> {
+    ProtocolError::Endo(err)
+}
+
+pub fn to_network_exo<T: StdError, K: Display>(err: K) -> ProtocolError<T, NetworkError> {
+    ProtocolError::Exo(to_network(err.to_string()))
 }

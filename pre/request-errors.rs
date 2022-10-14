@@ -1,21 +1,18 @@
-
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum GetPool{
+pub enum GetPool {
     #[error(transparent)]
     PoolKeyError(#[from] PoolKeyError),
     #[error(transparent)]
-    MelnetError(#[from] MelnetError),
+    NetworkError(#[from] NetworkError),
     #[error(transparent)]
     BadRequest(#[from] BadRequest),
-    
 }
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum GetPool{
+pub enum GetPool {
     #[error(transparent)]
     PoolKeyError(#[from] PoolKeyError),
     #[error(transparent)]
-    MelnetError(#[from] MelnetError),
+    NetworkError(#[from] NetworkError),
     #[error(transparent)]
     BadRequest(#[from] BadRequest),
-    
 }
