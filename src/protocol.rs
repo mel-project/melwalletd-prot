@@ -1,5 +1,6 @@
 use crate::error::{
-    self, InvalidPassword, NeedWallet, NeverError, PoolKeyError, StateError, TransactionError, CreateWalletError, PrepareTxError,
+    self, CreateWalletError, InvalidPassword, NeedWallet, NeverError, PoolKeyError, PrepareTxError,
+    StateError, TransactionError,
 };
 
 use crate::types::{PoolInfo, PrepareTxArgs, TxBalance, WalletSummary};
