@@ -1,8 +1,7 @@
 use crate::error::{
-    self, InvalidPassword, NeedWallet, NeverError, PoolKeyError, StateError, TransactionError,
+    self, InvalidPassword, NeedWallet, NeverError, PoolKeyError, StateError, TransactionError, CreateWalletError, PrepareTxError,
 };
 
-use crate::request_errors::{CreateWalletError, PrepareTxError};
 use crate::types::{PoolInfo, PrepareTxArgs, TxBalance, WalletSummary};
 use crate::walletdata::TransactionStatus;
 use async_trait::async_trait;
