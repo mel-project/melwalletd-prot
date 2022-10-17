@@ -1,5 +1,6 @@
-pub mod protocol;
-pub mod types;
-pub mod walletdata;
+mod protocol;
+pub use protocol::*;
 pub mod error;
 pub mod signer;
+pub mod types;
+pub mod walletdata;

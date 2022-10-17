@@ -10,7 +10,7 @@ use themelio_structs::{
 use thiserror::Error;
 use tmelcrypt::Ed25519SK;
 
-use crate::{error::InvalidPassword, signer::Signer};
+use crate::signer::Signer;
 
 #[derive(Error, Debug)]
 pub enum DatabaseError {
@@ -31,65 +31,6 @@ pub struct WalletSummary {
     pub locked: bool,
 }
 
-#[async_trait]
-/// Used by MelwalletProtocol and impl for AppState in melwalletd
-pub trait MelwalletdHelpers {
-    async fn list_wallets(&self) -> BTreeMap<String, WalletSummary>;
-    fn get_signer(&self, name: &str) -> Option<Arc<dyn Signer>>;
-    fn unlock(&self, name: &str, pwd: Option<String>) -> Option<()>;
-    fn get_secret_key(
-        &self,
-        name: &str,
-        pwd: Option<String>,
-    ) -> Result<Option<Ed25519SK>, InvalidPassword>;
-    async fn get_wallet(&self, name: &str) -> Option<Box<dyn Melwallet + Send + Sync>>;
-    fn lock(&self, name: &str);
-    async fn create_wallet(
-        &self,
-        name: &str,
-        key: Ed25519SK,
-        pwd: Option<String>,
-    ) -> anyhow::Result<()>;
-    fn client(&self) -> ValClient;
-    fn get_network(&self) -> NetID;
-}
-
-#[async_trait]
-pub trait Melwallet {
-    fn address(&self) -> Address;
-    async fn get_transaction(
-        &self,
-        txhash: TxHash,
-        snapshot: ValClientSnapshot,
-    ) -> Result<Option<Transaction>, DatabaseError>;
-    async fn get_cached_transaction(&self, txhash: TxHash) -> Option<Transaction>;
-    async fn is_pending(&self, txhash: TxHash) -> bool;
-    async fn get_balances(&self) -> BTreeMap<Denom, CoinValue>;
-    async fn get_transaction_history(&self) -> Vec<(TxHash, Option<BlockHeight>)>;
-    async fn get_coin_mapping(
-        &self,
-        confirmed: bool,
-        ignore_pending: bool,
-    ) -> BTreeMap<CoinID, CoinData>;
-
-    #[allow(clippy::too_many_arguments)]
-    async fn prepare(
-        &self,
-        inputs: Vec<CoinID>,
-        outputs: Vec<CoinData>,
-        fee_multiplier: u128,
-        sign: Arc<Box<dyn Fn(Transaction) -> anyhow::Result<Transaction> + Send + Sync>>,
-        nobalance: Vec<Denom>,
-        fee_ballast: usize,
-
-        snap: ValClientSnapshot,
-    ) -> anyhow::Result<Transaction>;
-    async fn commit_sent(&self, txn: Transaction, timeout: BlockHeight) -> anyhow::Result<()>;
-    async fn get_one_coin(&self, coin_id: CoinID) -> Option<CoinData>;
-    async fn get_coin_confirmation(&self, coin_id: CoinID) -> Option<CoinDataHeight>;
-    async fn network_sync(&self, snapshot: ValClientSnapshot) -> anyhow::Result<()>;
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PrepareTxArgs {
     #[serde(default)]
@@ -99,18 +40,16 @@ pub struct PrepareTxArgs {
     #[serde(default, with = "stdcode::hexvec")]
     pub covenants: Vec<Vec<u8>>,
     pub data: Option<String>,
-    #[serde(default)]
-    pub nobalance: Vec<Denom>,
+
     #[serde(default)]
     pub fee_ballast: usize,
     pub signing_key: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct PoolInfo {
+pub struct SwapInfo {
     pub result: u128,
     pub price_impact: f64,
-    pub poolkey: String,
 }
 #[derive(Serialize, Deserialize)]
 pub struct TxBalance(pub bool, pub TxKind, pub BTreeMap<String, i128>);
