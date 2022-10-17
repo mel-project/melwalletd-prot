@@ -32,7 +32,7 @@ pub struct WalletSummary {
 }
 
 #[async_trait]
-/// Used by MelwalletProtocol
+/// Used by MelwalletProtocol and impl for AppState in melwalletd
 pub trait MelwalletdHelpers {
     async fn list_wallets(&self) -> BTreeMap<String, WalletSummary>;
     fn get_signer(&self, name: &str) -> Option<Arc<dyn Signer>>;
