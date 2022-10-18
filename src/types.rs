@@ -2,15 +2,13 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use themelio_nodeprot::{ValClient, ValClientSnapshot};
+use themelio_nodeprot::{ValClientSnapshot};
 use themelio_structs::{
     Address, BlockHeight, CoinData, CoinDataHeight, CoinID, CoinValue, Denom, NetID, Transaction,
     TxHash, TxKind,
 };
 use thiserror::Error;
-use tmelcrypt::Ed25519SK;
 
-use crate::{error::InvalidPassword, signer::Signer};
 
 #[derive(Error, Debug)]
 pub enum DatabaseError {
@@ -29,29 +27,6 @@ pub struct WalletSummary {
     #[serde(with = "stdcode::asstr")]
     pub address: Address,
     pub locked: bool,
-}
-
-#[async_trait]
-/// Used by MelwalletProtocol and impl for AppState in melwalletd
-pub trait MelwalletdHelpers {
-    async fn list_wallets(&self) -> BTreeMap<String, WalletSummary>;
-    fn get_signer(&self, name: &str) -> Option<Arc<dyn Signer>>;
-    fn unlock(&self, name: &str, pwd: Option<String>) -> Option<()>;
-    fn get_secret_key(
-        &self,
-        name: &str,
-        pwd: Option<String>,
-    ) -> Result<Option<Ed25519SK>, InvalidPassword>;
-    async fn get_wallet(&self, name: &str) -> Option<Box<dyn Melwallet + Send + Sync>>;
-    fn lock(&self, name: &str);
-    async fn create_wallet(
-        &self,
-        name: &str,
-        key: Ed25519SK,
-        pwd: Option<String>,
-    ) -> anyhow::Result<()>;
-    fn client(&self) -> ValClient;
-    fn get_network(&self) -> NetID;
 }
 
 #[async_trait]
