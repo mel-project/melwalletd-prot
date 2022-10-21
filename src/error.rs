@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use std::error::Error as StdError;
-use themelio_structs::{CoinValue, Denom, PoolKey, TxHash};
+use themelio_structs::{CoinValue, Denom, TxHash};
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 /// Indicates a problem with accessing the wallet

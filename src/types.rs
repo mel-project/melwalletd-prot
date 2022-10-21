@@ -1,16 +1,15 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap};
 
-use async_trait::async_trait;
+
 use serde::{Deserialize, Serialize};
-use themelio_nodeprot::{ValClient, ValClientSnapshot};
+
 use themelio_structs::{
-    Address, BlockHeight, CoinData, CoinDataHeight, CoinID, CoinValue, Denom, NetID, Transaction,
-    TxHash, TxKind,
+    Address, CoinData, CoinID, CoinValue, Denom, NetID, TxKind,
 };
 use thiserror::Error;
-use tmelcrypt::Ed25519SK;
 
-use crate::signer::Signer;
+
+
 
 #[derive(Error, Debug)]
 pub enum DatabaseError {
@@ -40,7 +39,8 @@ pub struct PrepareTxArgs {
     #[serde(default, with = "stdcode::hexvec")]
     pub covenants: Vec<Vec<u8>>,
     pub data: Option<String>,
-
+    #[serde(default)]
+    pub nobalance: Vec<Denom>,
     #[serde(default)]
     pub fee_ballast: usize,
     pub signing_key: Option<String>,
@@ -50,6 +50,7 @@ pub struct PrepareTxArgs {
 pub struct SwapInfo {
     pub result: u128,
     pub price_impact: f64,
+    pub poolkey: String,
 }
 #[derive(Serialize, Deserialize)]
 pub struct TxBalance(pub bool, pub TxKind, pub BTreeMap<String, i128>);
