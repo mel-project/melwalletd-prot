@@ -82,7 +82,7 @@ pub struct PrepareTxArgs {
 }
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)] 
 pub struct PoolInfo {
     pub result: u128,
     pub price_impact: f64,
