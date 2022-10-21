@@ -33,17 +33,17 @@ pub struct WalletSummary {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PrepareTxArgs {
     #[serde(default)]
-    pub kind: Option<TxKind>,
-    pub inputs: Vec<CoinID>,
-    pub outputs: Vec<CoinData>,
+    inputs: Vec<CoinID>,
+    outputs: Vec<CoinData>,
+    signing_key: Option<String>,
+    kind: Option<TxKind>,
+    data: Option<String>,
     #[serde(default, with = "stdcode::hexvec")]
-    pub covenants: Vec<Vec<u8>>,
-    pub data: Option<String>,
+    covenants: Vec<Vec<u8>>,
     #[serde(default)]
-    pub nobalance: Vec<Denom>,
+    nobalance: Vec<Denom>,
     #[serde(default)]
     pub fee_ballast: usize,
-    pub signing_key: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
