@@ -96,7 +96,12 @@ pub struct PrepareTxArgs {
     #[serde(default = "txkind_normal")]
     /// "Kind" of the transaction. Optional in JSON, defaulting to [TxKind::Normal].
     pub kind: TxKind,
-    /// **Required** inputs of the transaction. This is usually used to specify "out of wallet" coins from dapps, multisig vaults, and such, which do not have their `covhash` field equal to the [Address] of the wallet, yet the wallet is able to spend, possibly in combination with other fields of [PrepareTxArgs]. For example, a multisig coin would not have the [Address] of any single-key wallet, and spending it must require explicitly specifying its [CoinID] and explicitly passing unlock arguments.
+    /// **Additional** inputs of the transaction. Normally, this field can be left as an empty vector, in which case UTXOs locked by the wallet's own address are picked automatically.
+    ///
+    /// Use this field to specify "out of wallet" coins from dapps, multisig vaults, and such, which do not have their `covhash` field equal to the [Address] of the wallet, yet the wallet is able to spend, possibly in combination with other fields of [PrepareTxArgs]. For example, a multisig coin would not have the [Address] of any single-key wallet, and spending it must require explicitly specifying its [CoinID] and explicitly passing unlock arguments.
+    ///
+    /// Optional in JSON, in which case it defaults to an empty list.
+    #[serde(default)]
     pub inputs: Vec<CoinID>,
     /// **Required** outputs of the transaction. This generally specifies the "recipients" of the transaction. Note that this only specifies the first outputs of the transaction; more outputs may be created as "change" outputs.
     pub outputs: Vec<CoinData>,
