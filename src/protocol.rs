@@ -1,9 +1,8 @@
-use crate::error::{
-    self, CreateWalletError, NeedWallet, NetworkError, PrepareTxError, WalletAccessError,
+use crate::types::{
+    CreateWalletError, NeedWallet, NetworkError, PrepareTxArgs, PrepareTxError, SwapInfo,
+    TransactionStatus, TxBalance, WalletAccessError, WalletSummary,
 };
 
-use crate::types::{PrepareTxArgs, SwapInfo, TxBalance, WalletSummary};
-use crate::walletdata::TransactionStatus;
 use async_trait::async_trait;
 use nanorpc::nanorpc_derive;
 use std::fmt::Debug;
@@ -13,19 +12,32 @@ use tmelcrypt::HashVal;
 
 #[nanorpc_derive]
 #[async_trait]
+/// A [macro@nanorpc_derive] trait that describes the RPC protocol exposed by a `melwalletd` daemon.
+///
+/// **Note**: since the trait uses [macro@async_trait], the function signatures shown in the documentation are a little funky. The "human readable" versions are merely async methods; for example [MelwalletdProtocol::wallet_summary] should be implemented like
+/// ```ignore
+/// #[async_trait]
+/// impl MelwalletdProtocol for YourBusinessLogic {
+///     //...
+///     async fn wallet_summary(&self, wallet_name: String)
+///         -> Result<WalletSummary, WalletAccessError> {
+///         todo!()
+///     }
+/// }
+/// ```
 pub trait MelwalletdProtocol: Send + Sync {
     /// Returns a summary of the overall state of the wallet. See [WalletSummary] for what that entails.
     async fn wallet_summary(&self, wallet_name: String)
         -> Result<WalletSummary, WalletAccessError>;
 
     /// Returns the latest blockchain header.
-    async fn latest_header(&self) -> Result<Header, error::NetworkError>;
+    async fn latest_header(&self) -> Result<Header, NetworkError>;
 
     /// Obtains up-to-date information about a particular melswap pool, identified by its [PoolKey]. Returns `None` if no such pool exists.
     async fn melswap_info(&self, pool_key: PoolKey) -> Result<Option<PoolState>, NetworkError>;
 
     /// Simulates a swap between the two given [Denom]s, returning a [SwapInfo] that contains detailed information about the swap (such as price, slippage, etc)
-    async fn simulate_pool_swap(
+    async fn simulate_swap(
         &self,
         to: Denom,
         from: Denom,
