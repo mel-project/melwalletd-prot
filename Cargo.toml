@@ -2,7 +2,8 @@
 name = "melwalletd-prot"
 version = "0.1.0"
 edition = "2021"
-
+repository="https://github.com/themeliolabs/melwalletd-prot"
+license="ISC"
 
 [dependencies]
 anyhow = "1.0.66"
