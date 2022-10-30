@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 repository="https://github.com/themeliolabs/melwalletd-prot"
 license="ISC"
+description="RPC protocol for Themelio's reference wallet microservice"
 
 [dependencies]
 anyhow = "1.0.66"
