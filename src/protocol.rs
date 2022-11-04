@@ -26,6 +26,9 @@ use tmelcrypt::HashVal;
 /// }
 /// ```
 pub trait MelwalletdProtocol: Send + Sync {
+    /// Returns a list of wallet names.
+    async fn list_wallets(&self) -> Vec<String>;
+
     /// Returns a summary of the overall state of the wallet. See [WalletSummary] for what that entails.
     async fn wallet_summary(&self, wallet_name: String)
         -> Result<WalletSummary, WalletAccessError>;
