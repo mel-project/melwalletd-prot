@@ -5,10 +5,12 @@ use crate::types::{
 
 use async_trait::async_trait;
 use nanorpc::nanorpc_derive;
+use stdcode::SerializeAsString;
 use std::fmt::Debug;
 use themelio_structs::{BlockHeight, CoinData, CoinID, Denom, Transaction, TxHash};
 use themelio_structs::{Header, PoolKey, PoolState};
 use tmelcrypt::HashVal;
+
 
 #[nanorpc_derive]
 #[async_trait]
@@ -37,13 +39,13 @@ pub trait MelwalletdProtocol: Send + Sync {
     async fn latest_header(&self) -> Result<Header, NetworkError>;
 
     /// Obtains up-to-date information about a particular melswap pool, identified by its [PoolKey]. Returns `None` if no such pool exists.
-    async fn melswap_info(&self, pool_key: PoolKey) -> Result<Option<PoolState>, NetworkError>;
+    async fn melswap_info(&self, pool_key: SerializeAsString<PoolKey>) -> Result<Option<PoolState>, NetworkError>;
 
     /// Simulates a swap between the two given [Denom]s, returning a [SwapInfo] that contains detailed information about the swap (such as price, slippage, etc)
     async fn simulate_swap(
         &self,
-        to: Denom,
-        from: Denom,
+        to: SerializeAsString<Denom>,
+        from: SerializeAsString<Denom>,
         value: u128,
     ) -> Result<Option<SwapInfo>, NetworkError>;
 

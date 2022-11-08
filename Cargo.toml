@@ -12,7 +12,7 @@ async-trait = "0.1.58"
 nanorpc = "0.1.11"
 serde = { version = "1.0.147", features = ["derive"] }
 serde_json = "1.0.87"
-stdcode = "0.1.10"
+stdcode = "0.1.12"
 themelio-structs = "0.2.10"
 thiserror = "1.0.37"
 tmelcrypt = "0.2.4"
