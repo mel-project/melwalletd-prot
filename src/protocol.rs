@@ -1,14 +1,16 @@
 use crate::types::{
-    CreateWalletError, NeedWallet, NetworkError, PrepareTxArgs, PrepareTxError, SwapInfo,
-    TransactionStatus, TxBalance, WalletAccessError, WalletSummary,
+    CreateWalletError, NeedWallet, NetworkError, PrepareTxArgs, PrepareTxError,
+    SwapInfo, TransactionStatus, TxBalance, WalletAccessError, WalletSummary,
 };
 
 use async_trait::async_trait;
 use nanorpc::nanorpc_derive;
-use stdcode::SerializeAsString;
 use std::fmt::Debug;
-use themelio_structs::{BlockHeight, CoinData, CoinID, Denom, Transaction, TxHash};
-use themelio_structs::{Header, PoolKey, PoolState};
+use stdcode::SerializeAsString;
+use themelio_structs::{
+ BlockHeight, CoinData, CoinID, Denom, Header, Transaction, TxHash,
+};
+use themelio_structs::{PoolKey, PoolState};
 use tmelcrypt::HashVal;
 
 
@@ -32,14 +34,19 @@ pub trait MelwalletdProtocol: Send + Sync {
     async fn list_wallets(&self) -> Vec<String>;
 
     /// Returns a summary of the overall state of the wallet. See [WalletSummary] for what that entails.
-    async fn wallet_summary(&self, wallet_name: String)
-        -> Result<WalletSummary, WalletAccessError>;
+    async fn wallet_summary(
+        &self,
+        wallet_name: String,
+    ) -> Result<WalletSummary, WalletAccessError>;
 
     /// Returns the latest blockchain header.
     async fn latest_header(&self) -> Result<Header, NetworkError>;
 
     /// Obtains up-to-date information about a particular melswap pool, identified by its [PoolKey]. Returns `None` if no such pool exists.
-    async fn melswap_info(&self, pool_key: SerializeAsString<PoolKey>) -> Result<Option<PoolState>, NetworkError>;
+    async fn melswap_info(
+        &self,
+        pool_key: SerializeAsString<PoolKey>,
+    ) -> Result<Option<PoolState>, NetworkError>;
 
     /// Simulates a swap between the two given [Denom]s, returning a [SwapInfo] that contains detailed information about the swap (such as price, slippage, etc)
     async fn simulate_swap(
