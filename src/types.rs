@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use stdcode::SerializeAsString;
 use themelio_structs::{
-    Address, BlockHeight, CoinData, CoinID, CoinValue, Denom, NetID, Transaction, TxKind,
+    Address, BlockHeight, CoinData, CoinID, CoinValue, Denom, NetID, Transaction, TxKind, PoolKey,
 };
 use thiserror::Error;
 
@@ -135,8 +135,8 @@ pub struct SwapInfo {
     pub result: u128,
     /// Impact to the price, as a fraction
     pub slippage: u128,
-    /// String representation of the poolkey
-    pub poolkey: String,
+    #[serde(with = "stdcode::asstr")]
+    pub poolkey: PoolKey,
 }
 #[derive(Serialize, Deserialize)]
 /// A tuple including:
@@ -145,8 +145,9 @@ pub struct SwapInfo {
 /// - a mapping between string-represented [Denom]s and how much the balance of that [Denom] changed in this transaction.
 pub struct TxBalance(
     pub bool,
-    #[serde(with = "stdcode::asstr")] pub TxKind,
-    pub BTreeMap<String, i128>,
+    #[serde(with = "stdcode::asstr")] 
+    pub TxKind,
+    pub BTreeMap<SerializeAsString<Denom>, i128>,
 );
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
