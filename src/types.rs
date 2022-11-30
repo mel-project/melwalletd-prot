@@ -2,10 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use serde_with::serde_as;
-use stdcode::SerializeAsString;
 use themelio_structs::{
-    Address, BlockHeight, CoinData, CoinID, CoinValue, Denom, NetID, Transaction, TxKind, PoolKey,
+    Address, BlockHeight, CoinData, CoinID, CoinValue, Denom, NetID, Transaction, TxKind,
 };
 use thiserror::Error;
 
@@ -80,10 +78,9 @@ pub struct WalletSummary {
     /// Total MEL balance. JSON-serialized as micromels.
     pub total_micromel: CoinValue,
     /// Detailed balance. Keys are the standard (Display/FromStr) string representation of a [Denom].
-    pub detailed_balance: BTreeMap<SerializeAsString<Denom>, CoinValue>,
+    pub detailed_balance: BTreeMap<String, CoinValue>,
     /// SYM that is inaccessible due to being staked.
     pub staked_microsym: CoinValue,
-    #[serde(with = "stdcode::asstr")]
     /// Network ID (mainnet, testnet, etc). JSON-serialized as the corresponding integer.
     pub network: NetID,
     /// Address of this wallet. JSON-serialized as the standard `t.....` address format.
@@ -93,12 +90,10 @@ pub struct WalletSummary {
     pub locked: bool,
 }
 
-#[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 /// Arguments passed to [crate::MelwalletdProtocol::prepare_tx]. Configures what sort of transaction to construct.
 pub struct PrepareTxArgs {
     #[serde(default = "txkind_normal")]
-    #[serde(with = "stdcode::asstr")]
     /// "Kind" of the transaction. Optional in JSON, defaulting to [TxKind::Normal].
     pub kind: TxKind,
     /// **Additional** inputs of the transaction. Normally, this field can be left as an empty vector, in which case UTXOs locked by the wallet's own address are picked automatically.
@@ -134,21 +129,16 @@ pub struct SwapInfo {
     /// How many units of the "other" token will the swap obtain
     pub result: u128,
     /// Impact to the price, as a fraction
-    pub slippage: u128,
-    #[serde(with = "stdcode::asstr")]
-    pub poolkey: PoolKey,
+    pub price_impact: f64,
+    /// String representation of the poolkey
+    pub poolkey: String,
 }
 #[derive(Serialize, Deserialize)]
 /// A tuple including:
 /// - whether the transaction is spent
 /// - the kind of the transaction
 /// - a mapping between string-represented [Denom]s and how much the balance of that [Denom] changed in this transaction.
-pub struct TxBalance(
-    pub bool,
-    #[serde(with = "stdcode::asstr")] 
-    pub TxKind,
-    pub BTreeMap<SerializeAsString<Denom>, i128>,
-);
+pub struct TxBalance(pub bool, pub TxKind, pub BTreeMap<String, i128>);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 /// The status of a transaction that is currently in progress.
