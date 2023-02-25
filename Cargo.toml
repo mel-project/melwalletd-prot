@@ -7,12 +7,12 @@ license="ISC"
 description="RPC protocol for Themelio's reference wallet microservice"
 
 [dependencies]
-anyhow = "1.0.66"
-async-trait = "0.1.58"
-nanorpc = "0.1.11"
-serde = { version = "1.0.147", features = ["derive"] }
-serde_json = "1.0.87"
-stdcode = "0.1.10"
-themelio-structs = "0.2.10"
-thiserror = "1.0.37"
-tmelcrypt = "0.2.4"
+anyhow = "1.0.69"
+async-trait = "0.1.64"
+nanorpc = "0.1.12"
+serde = { version = "1.0.152", features = ["derive"] }
+serde_json = "1.0.93"
+stdcode = "0.1.14"
+melstructs = "0.3.0"
+thiserror = "1.0.38"
+tmelcrypt = "0.2.7"

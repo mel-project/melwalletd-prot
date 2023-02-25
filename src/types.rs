@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use themelio_structs::{
+use melstructs::{
     Address, BlockHeight, CoinData, CoinID, CoinValue, Denom, NetID, Transaction, TxKind,
 };
 use thiserror::Error;

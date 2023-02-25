@@ -4,10 +4,10 @@ use crate::types::{
 };
 
 use async_trait::async_trait;
+use melstructs::{BlockHeight, CoinData, CoinID, Denom, Transaction, TxHash};
+use melstructs::{Header, PoolKey, PoolState};
 use nanorpc::nanorpc_derive;
 use std::fmt::Debug;
-use themelio_structs::{BlockHeight, CoinData, CoinID, Denom, Transaction, TxHash};
-use themelio_structs::{Header, PoolKey, PoolState};
 use tmelcrypt::HashVal;
 
 #[nanorpc_derive]
